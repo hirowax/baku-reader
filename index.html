@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Baku Reader</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: sans-serif; background: #f0f0f0; min-height: 100vh; }
+
+  /* ===== 入力フォーム ===== */
+  #viewForm {
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; padding: 16px;
+  }
+  .card {
+    background: #fff; border-radius: 10px; padding: 40px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.1); width: 100%; max-width: 560px;
+  }
+  .card h1 { font-size: 1.4rem; margin-bottom: 8px; color: #333; }
+  .card p  { color: #888; font-size: .9rem; margin-bottom: 24px; }
+  .card input[type=text] {
+    width: 100%; padding: 12px; border: 1px solid #ddd;
+    border-radius: 6px; font-size: 1rem; outline: none;
+  }
+  .card input[type=text]:focus { border-color: #e05; }
+  .card button {
+    margin-top: 12px; width: 100%; padding: 12px;
+    background: #e05; color: #fff; border: none;
+    border-radius: 6px; font-size: 1rem; cursor: pointer;
+  }
+  .card button:hover { background: #c04; }
+  .card button:disabled { background: #bbb; cursor: default; }
+  .card .error { margin-top: 16px; color: #e05; font-size: .9rem; }
+
+  /* ===== ローディング ===== */
+  #viewLoading {
+    display: none; justify-content: center; align-items: center;
+    min-height: 100vh; flex-direction: column; gap: 16px;
+  }
+  .spinner {
+    width: 48px; height: 48px; border: 5px solid #ddd;
+    border-top-color: #e05; border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loadingMsg { color: #666; font-size: .9rem; }
+
+  /* ===== スレッド表示 ===== */
+  #viewThread { display: none; padding: 16px; }
+
+  .thread-header {
+    background: #e05; color: #fff; padding: 16px 20px;
+    border-radius: 8px; margin-bottom: 16px;
+    max-width: 800px; margin-left: auto; margin-right: auto;
+  }
+  .thread-header h1 { font-size: 1.1rem; margin-bottom: 4px; }
+  .thread-header .info { font-size: .85rem; opacity: .85; }
+  .thread-header a { color: #ffc; }
+
+  .back {
+    display: block; margin-bottom: 12px; color: #e05;
+    text-decoration: none; font-size: .9rem;
+    max-width: 800px; margin-left: auto; margin-right: auto;
+    cursor: pointer;
+  }
+  .back:hover { text-decoration: underline; }
+
+  .posts { max-width: 800px; margin: 0 auto; }
+
+  .post {
+    background: #fff; border-radius: 8px; padding: 12px 16px;
+    margin-bottom: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    transition: outline .1s;
+  }
+  .post.highlight { outline: 2px solid #1a6fd4; }
+  .post-header {
+    display: flex; align-items: baseline; gap: 10px;
+    margin-bottom: 6px; flex-wrap: wrap;
+  }
+  .num  { font-weight: bold; color: #e05; font-size: .95rem; min-width: 40px; }
+  .meta { color: #999; font-size: .8rem; }
+  .body { font-size: .95rem; line-height: 1.7; color: #333; word-break: break-all; }
+  .no-body { color: #bbb; font-size: .85rem; font-style: italic; }
+
+  /* ===== >>引用リンク ===== */
+  .quote-link {
+    display: inline-block; color: #1a6fd4; font-weight: bold;
+    cursor: pointer; border-radius: 3px; padding: 0 2px;
+    transition: background .15s;
+  }
+  .quote-link:hover { background: #e8f0fc; }
+
+  /* ===== ポップアップ ===== */
+  #quotePopup {
+    position: fixed; z-index: 9999;
+    max-width: min(360px, 90vw);
+    background: #fff; border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.18), 0 2px 8px rgba(0,0,0,.1);
+    overflow: hidden;
+    opacity: 0; transform: translateY(6px) scale(.97);
+    transition: opacity .18s ease, transform .18s ease;
+    pointer-events: none;
+  }
+  #quotePopup.show {
+    opacity: 1; transform: translateY(0) scale(1); pointer-events: auto;
+  }
+  .popup-header {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #f5f5f5; padding: 8px 12px; border-bottom: 1px solid #eee;
+  }
+  .popup-num  { font-weight: bold; color: #e05; font-size: .9rem; }
+  .popup-time { color: #aaa; font-size: .78rem; }
+  .popup-close {
+    width: 22px; height: 22px; display: flex; align-items: center;
+    justify-content: center; border-radius: 50%; background: #e0e0e0;
+    cursor: pointer; font-size: .85rem; color: #666; flex-shrink: 0;
+    transition: background .15s;
+  }
+  .popup-close:hover { background: #ccc; }
+  .popup-body {
+    padding: 12px 14px; font-size: .9rem; line-height: 1.7; color: #333;
+    word-break: break-all; max-height: 220px; overflow-y: auto;
+  }
+  .popup-body::-webkit-scrollbar { width: 4px; }
+  .popup-body::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
+  .popup-scroll-hint {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 7px 14px; border-top: 1px solid #f0f0f0;
+    font-size: .78rem; color: #aaa; cursor: pointer; transition: background .15s;
+  }
+  .popup-scroll-hint:hover { background: #f7f7f7; color: #e05; }
+
+  #quoteOverlay {
+    display: none; position: fixed; inset: 0; z-index: 9998;
+  }
+  #quoteOverlay.show { display: block; }
+</style>
+</head>
+<body>
+
+<!-- 入力フォーム -->
+<div id="viewForm">
+  <div class="card">
+    <h1>Baku Reader</h1>
+    <p>スレッドURLを貼り付けると、全レスを1ページで表示します。</p>
+    <input type="text" id="urlInput" placeholder="https://bakusai.com/thr_res/..." autofocus
+           onkeydown="if(event.key==='Enter') loadThread()">
+    <button id="loadBtn" onclick="loadThread()">全レスを読む</button>
+    <p class="error" id="errorMsg" style="display:none"></p>
+  </div>
+</div>
+
+<!-- ローディング -->
+<div id="viewLoading">
+  <div class="spinner"></div>
+  <p id="loadingMsg">取得中...</p>
+</div>
+
+<!-- スレッド表示 -->
+<div id="viewThread">
+  <span class="back" onclick="backToForm()">← 別のスレを読む</span>
+  <div class="thread-header">
+    <h1 id="threadTitle"></h1>
+    <div class="info" id="threadInfo"></div>
+  </div>
+  <div class="posts" id="postList"></div>
+</div>
+
+<!-- ポップアップ -->
+<div id="quoteOverlay"></div>
+<div id="quotePopup">
+  <div class="popup-header">
+    <span class="popup-num" id="popupNum"></span>
+    <span class="popup-time" id="popupTime"></span>
+    <span class="popup-close" id="popupClose">✕</span>
+  </div>
+  <div class="popup-body" id="popupBody"></div>
+  <div class="popup-scroll-hint" id="popupHint">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <path d="M12 5v14M5 12l7 7 7-7"/>
+    </svg>
+    このレスへ移動
+  </div>
+</div>
+
+<script>
+const PROXY = "https://api.allorigins.win/raw?url=";
+
+// ===== URL正規化 =====
+function normalizeBaseUrl(url) {
+  url = url.trim().replace(/\/$/, "");
+  url = url.replace(/\/p=\d+/g, "").replace(/\/tp=\d+/g, "");
+  return url.replace(/\/$/, "");
+}
+function buildPageUrl(base, page) {
+  return page === 1 ? base + "/" : `${base}/p=${page}/tp=1/`;
+}
+
+// ===== フェッチ =====
+async function fetchPage(url) {
+  const res = await fetch(PROXY + encodeURIComponent(url));
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const html = await res.text();
+  return new DOMParser().parseFromString(html, "text/html");
+}
+
+// ===== パース =====
+function getTitle(doc) {
+  const t = doc.title || "";
+  return t.split(/\s*[-－]\s*/)[0] || "スレッド";
+}
+function getLastPage(doc) {
+  const nums = [...doc.querySelectorAll("a[href*='/p=']")]
+    .map(a => { const m = a.href.match(/\/p=(\d+)\//); return m ? +m[1] : 0; })
+    .filter(Boolean);
+  return nums.length ? Math.max(...nums) : 1;
+}
+function parsePosts(doc) {
+  const posts = [];
+  for (const dt of doc.querySelectorAll("dt")) {
+    const wrap = dt.querySelector("div.res_meta_wrap");
+    if (!wrap) continue;
+    const numEl  = wrap.querySelector("span.resnumb");
+    const timeEl = wrap.querySelector("span[itemprop='commentTime']");
+    const num  = numEl  ? numEl.textContent.trim()  : "";
+    const time = timeEl ? timeEl.textContent.trim() : "";
+    const numInt = parseInt(num.replace(/\D/g, "")) || 0;
+    if (!num || numInt === 0) continue;
+
+    let bodyHtml = "";
+    for (let sib = dt.nextSibling; sib; sib = sib.nextSibling) {
+      if (sib.nodeType !== 1) continue;
+      if (sib.tagName === "DD") {
+        const rb = sib.querySelector("div.resbody");
+        if (rb) bodyHtml = rb.innerHTML;
+        break;
+      }
+      if (sib.tagName === "DT") break;
+    }
+    posts.push({ num, numInt, time, bodyHtml });
+  }
+  return posts;
+}
+
+// ===== メイン処理 =====
+const POSTS = {};
+
+async function loadThread() {
+  const url = document.getElementById("urlInput").value.trim();
+  if (!url) return;
+
+  const errEl = document.getElementById("errorMsg");
+  errEl.style.display = "none";
+  document.getElementById("loadBtn").disabled = true;
+
+  show("viewLoading");
+
+  try {
+    const base = normalizeBaseUrl(url);
+    const firstDoc = await fetchPage(buildPageUrl(base, 1));
+    const title    = getTitle(firstDoc);
+    const lastPage = getLastPage(firstDoc);
+    let allPosts   = parsePosts(firstDoc);
+
+    for (let p = 2; p <= lastPage; p++) {
+      setLoadingMsg(`取得中... ${p} / ${lastPage} ページ`);
+      await sleep(1500);
+      const doc = await fetchPage(buildPageUrl(base, p));
+      allPosts = allPosts.concat(parsePosts(doc));
+    }
+
+    // 重複除去・ソート
+    const seen = new Set();
+    const unique = allPosts
+      .sort((a, b) => a.numInt - b.numInt)
+      .filter(p => { if (seen.has(p.numInt)) return false; seen.add(p.numInt); return true; });
+
+    // POSTS辞書に格納
+    Object.keys(POSTS).forEach(k => delete POSTS[k]);
+    unique.forEach(p => { POSTS[p.numInt] = p; });
+
+    renderThread(title, unique, lastPage, url);
+    show("viewThread");
+
+  } catch(e) {
+    show("viewForm");
+    errEl.textContent = "エラー: " + e.message;
+    errEl.style.display = "block";
+    document.getElementById("loadBtn").disabled = false;
+  }
+}
+
+function renderThread(title, posts, pages, url) {
+  document.getElementById("threadTitle").textContent = title;
+  document.getElementById("threadInfo").innerHTML =
+    `全 ${posts.length} レス ／ ${pages} ページ分を取得 ／ <a href="${url}" target="_blank">元スレを開く</a>`;
+
+  const list = document.getElementById("postList");
+  list.innerHTML = "";
+
+  if (posts.length === 0) {
+    list.innerHTML = '<p style="text-align:center;color:#999;margin-top:40px;">レスが見つかりませんでした。</p>';
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  for (const p of posts) {
+    const div = document.createElement("div");
+    div.className = "post";
+    div.id = "post-" + p.numInt;
+    div.innerHTML = `
+      <div class="post-header">
+        <span class="num">${p.num}</span>
+        <span class="meta">${p.time}</span>
+      </div>
+      ${p.bodyHtml
+        ? `<div class="body">${p.bodyHtml}</div>`
+        : `<p class="no-body">（本文なし）</p>`}
+    `;
+    frag.appendChild(div);
+  }
+  list.appendChild(frag);
+  processQuoteLinks();
+}
+
+function backToForm() {
+  show("viewForm");
+  document.getElementById("loadBtn").disabled = false;
+}
+
+// ===== ユーティリティ =====
+function show(id) {
+  ["viewForm","viewLoading","viewThread"].forEach(v => {
+    document.getElementById(v).style.display = v === id
+      ? (id === "viewLoading" ? "flex" : "block")
+      : "none";
+  });
+}
+function setLoadingMsg(msg) {
+  document.getElementById("loadingMsg").textContent = msg;
+}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ===== >>引用ポップアップ =====
+const popup   = document.getElementById("quotePopup");
+const overlay = document.getElementById("quoteOverlay");
+let currentTarget = null;
+
+function showPopup(n, anchor) {
+  const p = POSTS[n];
+  if (!p) return;
+  currentTarget = n;
+  document.getElementById("popupNum").textContent  = p.num;
+  document.getElementById("popupTime").textContent = p.time;
+  const tmp = document.createElement("div");
+  tmp.innerHTML = p.bodyHtml;
+  document.getElementById("popupBody").textContent = tmp.textContent || "（本文なし）";
+  const hint = document.getElementById("popupHint");
+  hint.style.display = document.getElementById("post-" + n) ? "flex" : "none";
+
+  popup.style.visibility = "hidden";
+  popup.style.left = "0px"; popup.style.top = "0px";
+  popup.classList.add("show");
+  overlay.classList.add("show");
+
+  requestAnimationFrame(() => {
+    const r  = anchor.getBoundingClientRect();
+    const pw = popup.offsetWidth  || 320;
+    const ph = popup.offsetHeight || 180;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let left = r.left, top = r.bottom + 8;
+    if (left + pw > vw - 8) left = vw - pw - 8;
+    if (left < 8) left = 8;
+    if (top + ph > vh - 8) top = r.top - ph - 8;
+    if (top < 8) top = 8;
+    popup.style.left = left + "px";
+    popup.style.top  = top  + "px";
+    popup.style.visibility = "";
+  });
+}
+function closePopup() {
+  popup.classList.remove("show");
+  overlay.classList.remove("show");
+  currentTarget = null;
+}
+
+document.getElementById("popupClose").addEventListener("click", closePopup);
+overlay.addEventListener("click", closePopup);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closePopup(); });
+
+document.getElementById("popupHint").addEventListener("click", () => {
+  if (currentTarget === null) return;
+  const el = document.getElementById("post-" + currentTarget);
+  if (el) {
+    closePopup();
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.style.outline = "2px solid #1a6fd4";
+    setTimeout(() => { el.style.outline = ""; }, 1500);
+  }
+});
+
+function processQuoteLinks() {
+  // resOverlay spanを置き換え
+  document.querySelectorAll(".body span.resOverlay").forEach(span => {
+    const tipso = span.getAttribute("data-tipso") || "";
+    const m = tipso.match(/title="#(\d+)へ返信"/);
+    const n = m ? parseInt(m[1]) : null;
+    const a = document.createElement("a");
+    a.className = "quote-link";
+    a.textContent = n ? ">>" + n : (span.textContent || ">>");
+    if (n !== null) a.addEventListener("click", e => { e.stopPropagation(); showPopup(n, a); });
+    span.replaceWith(a);
+  });
+
+  // プレーンテキストの >>数字 をリンク化
+  document.querySelectorAll(".body").forEach(bodyEl => {
+    const walker = document.createTreeWalker(bodyEl, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(node => {
+      if (!/>>(\d+)/.test(node.textContent)) return;
+      const frag = document.createDocumentFragment();
+      let last = 0;
+      const re = />>(\d+)/g; let match;
+      while ((match = re.exec(node.textContent)) !== null) {
+        if (match.index > last) frag.appendChild(document.createTextNode(node.textContent.slice(last, match.index)));
+        const n = parseInt(match[1]);
+        const a = document.createElement("a");
+        a.className = "quote-link"; a.textContent = ">>" + n;
+        a.addEventListener("click", e => { e.stopPropagation(); showPopup(n, a); });
+        frag.appendChild(a);
+        last = match.index + match[0].length;
+      }
+      if (last < node.textContent.length) frag.appendChild(document.createTextNode(node.textContent.slice(last)));
+      node.replaceWith(frag);
+    });
+  });
+}
+</script>
+</body>
+</html>
