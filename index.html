@@ -185,7 +185,11 @@
 </div>
 
 <script>
-const PROXY = "https://api.allorigins.win/raw?url=";
+const PROXIES = [
+  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+];
 
 // ===== URL正規化 =====
 function normalizeBaseUrl(url) {
@@ -197,12 +201,21 @@ function buildPageUrl(base, page) {
   return page === 1 ? base + "/" : `${base}/p=${page}/tp=1/`;
 }
 
-// ===== フェッチ =====
+// ===== フェッチ（プロキシを順番に試す） =====
 async function fetchPage(url) {
-  const res = await fetch(PROXY + encodeURIComponent(url));
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const html = await res.text();
-  return new DOMParser().parseFromString(html, "text/html");
+  let lastErr;
+  for (const proxyFn of PROXIES) {
+    try {
+      const res = await fetch(proxyFn(url), { signal: AbortSignal.timeout(10000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const html = await res.text();
+      if (html.length < 100) throw new Error("レスポンスが空です");
+      return new DOMParser().parseFromString(html, "text/html");
+    } catch(e) {
+      lastErr = e;
+    }
+  }
+  throw new Error("全プロキシ失敗: " + lastErr.message);
 }
 
 // ===== パース =====
