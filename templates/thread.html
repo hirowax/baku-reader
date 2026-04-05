@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: sans-serif; background: #f0f0f0; padding: 16px; }
+
+  .header { background: #e05; color: #fff; padding: 16px 20px;
+            border-radius: 8px; margin-bottom: 16px;
+            max-width: 800px; margin-left: auto; margin-right: auto; }
+  .header h1 { font-size: 1.1rem; margin-bottom: 4px; }
+  .header .info { font-size: .85rem; opacity: .85; }
+
+  .back { display: block; margin-bottom: 12px; color: #e05;
+          text-decoration: none; font-size: .9rem;
+          max-width: 800px; margin-left: auto; margin-right: auto; }
+  .back:hover { text-decoration: underline; }
+
+  .posts { max-width: 800px; margin: 0 auto; }
+
+  .post { background: #fff; border-radius: 8px; padding: 12px 16px;
+          margin-bottom: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+  .post-header { display: flex; align-items: baseline; gap: 10px;
+                 margin-bottom: 6px; flex-wrap: wrap; }
+  .num { font-weight: bold; color: #e05; font-size: .95rem; min-width: 40px; }
+  .meta { color: #999; font-size: .8rem; }
+
+  .body { font-size: .95rem; line-height: 1.7; color: #333; word-break: break-all; }
+  .body a { color: #e05; }
+  .no-body { color: #bbb; font-size: .85rem; font-style: italic; }
+
+  /* ===== >>引用リンク ===== */
+  .quote-link {
+    display: inline-block;
+    color: #1a6fd4;
+    font-weight: bold;
+    cursor: pointer;
+    text-decoration: none;
+    border-radius: 3px;
+    padding: 0 2px;
+    transition: background .15s;
+  }
+  .quote-link:hover { background: #e8f0fc; }
+
+  /* ===== ポップアップカード ===== */
+  #quotePopup {
+    position: fixed;
+    z-index: 9999;
+    max-width: min(360px, 90vw);
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.18), 0 2px 8px rgba(0,0,0,.1);
+    padding: 0;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(6px) scale(.97);
+    transition: opacity .18s ease, transform .18s ease;
+    pointer-events: none;
+  }
+  #quotePopup.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+  }
+  .popup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f5f5f5;
+    padding: 8px 12px;
+    border-bottom: 1px solid #eee;
+  }
+  .popup-num { font-weight: bold; color: #e05; font-size: .9rem; }
+  .popup-time { color: #aaa; font-size: .78rem; }
+  .popup-close {
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; background: #e0e0e0;
+    cursor: pointer; font-size: .85rem; color: #666;
+    flex-shrink: 0;
+    transition: background .15s;
+  }
+  .popup-close:hover { background: #ccc; }
+  .popup-body {
+    padding: 12px 14px;
+    font-size: .9rem;
+    line-height: 1.7;
+    color: #333;
+    word-break: break-all;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .popup-body::-webkit-scrollbar { width: 4px; }
+  .popup-body::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
+  .popup-scroll-hint {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 7px 14px;
+    border-top: 1px solid #f0f0f0;
+    font-size: .78rem; color: #aaa; cursor: pointer;
+    transition: background .15s;
+  }
+  .popup-scroll-hint:hover { background: #f7f7f7; color: #e05; }
+  .popup-scroll-hint svg { transition: stroke .15s; }
+  .popup-scroll-hint:hover svg { stroke: #e05; }
+
+  /* オーバーレイ（タップで閉じる用） */
+  #quoteOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+  }
+  #quoteOverlay.show { display: block; }
+</style>
+</head>
+<body>
+
+<a class="back" href="/">← 別のスレを読む</a>
+
+<div class="header">
+  <h1>{{ title }}</h1>
+  <div class="info">全 {{ total }} レス ／ {{ pages }} ページ分を取得 ／
+    <a href="{{ url }}" target="_blank" style="color:#ffc">元スレを開く</a>
+  </div>
+</div>
+
+<div class="posts">
+  {% for post in posts %}
+  <div class="post" id="post-{{ post.num_int }}">
+    <div class="post-header">
+      <span class="num">{{ post.num }}</span>
+      <span class="meta">{{ post.timestamp }}</span>
+    </div>
+    {% if post.body_html %}
+      <div class="body">{{ post.body_html | safe }}</div>
+    {% else %}
+      <p class="no-body">（本文なし）</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  {% if total == 0 %}
+  <p style="text-align:center;color:#999;margin-top:40px;">
+    レスが見つかりませんでした。URLを確認してください。
+  </p>
+  {% endif %}
+</div>
+
+<!-- ポップアップ -->
+<div id="quoteOverlay"></div>
+<div id="quotePopup">
+  <div class="popup-header">
+    <span class="popup-num" id="popupNum"></span>
+    <span class="popup-time" id="popupTime"></span>
+    <span class="popup-close" id="popupClose">✕</span>
+  </div>
+  <div class="popup-body" id="popupBody"></div>
+  <div class="popup-scroll-hint" id="popupScrollHint">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="2.5">
+      <path d="M12 5v14M5 12l7 7 7-7"/>
+    </svg>
+    このレスへ移動
+  </div>
+</div>
+
+<script>
+// 全投稿データをJS辞書に格納
+const POSTS = {};
+{% for post in posts %}
+POSTS[{{ post.num_int }}] = {
+  num: {{ post.num | tojson }},
+  time: {{ post.timestamp | tojson }},
+  bodyHtml: {{ post.body_html | tojson }},
+};
+{% endfor %}
+
+const popup   = document.getElementById("quotePopup");
+const overlay = document.getElementById("quoteOverlay");
+const popNum  = document.getElementById("popupNum");
+const popTime = document.getElementById("popupTime");
+const popBody = document.getElementById("popupBody");
+const popHint = document.getElementById("popupScrollHint");
+const popClose= document.getElementById("popupClose");
+
+let currentTarget = null;
+
+// ポップアップを開く
+function showPopup(n, anchorEl) {
+  const post = POSTS[n];
+  if (!post) return;
+
+  currentTarget = n;
+  popNum.textContent  = post.num;
+  popTime.textContent = post.time;
+
+  // HTMLタグを除いたプレーンテキストで表示（安全）
+  const tmp = document.createElement("div");
+  tmp.innerHTML = post.bodyHtml;
+  popBody.textContent = tmp.textContent || "（本文なし）";
+
+  // 移動先の投稿が存在するか確認
+  const targetEl = document.getElementById("post-" + n);
+  popHint.style.display = targetEl ? "flex" : "none";
+
+  // 位置計算
+  popup.classList.remove("show");
+  overlay.classList.add("show");
+
+  // いったん画面外に配置してサイズを測る
+  popup.style.visibility = "hidden";
+  popup.style.left = "0px";
+  popup.style.top  = "0px";
+  popup.classList.add("show");
+
+  requestAnimationFrame(() => {
+    const rect = anchorEl.getBoundingClientRect();
+    const pw = popup.offsetWidth  || 320;
+    const ph = popup.offsetHeight || 180;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    let left = rect.left;
+    let top  = rect.bottom + 8;
+
+    if (left + pw > vw - 8) left = vw - pw - 8;
+    if (left < 8) left = 8;
+    if (top + ph > vh - 8) top = rect.top - ph - 8;
+    if (top < 8) top = 8;
+
+    popup.style.left = left + "px";
+    popup.style.top  = top  + "px";
+    popup.style.visibility = "";
+  });
+}
+
+// ポップアップを閉じる
+function closePopup() {
+  popup.classList.remove("show");
+  overlay.classList.remove("show");
+  currentTarget = null;
+}
+
+popClose.addEventListener("click", closePopup);
+overlay.addEventListener("click", closePopup);
+document.addEventListener("keydown", e => { if (e.key === "Escape") closePopup(); });
+
+// 「このレスへ移動」
+popHint.addEventListener("click", () => {
+  if (currentTarget === null) return;
+  const el = document.getElementById("post-" + currentTarget);
+  if (el) {
+    closePopup();
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    // 一瞬ハイライト
+    el.style.outline = "2px solid #1a6fd4";
+    setTimeout(() => { el.style.outline = ""; }, 1500);
+  }
+});
+
+// >>リンクの書き換え処理
+function processQuoteLinks() {
+  // 1) resOverlay span（元サイトのツールチップ要素）を置き換え
+  document.querySelectorAll(".body span.resOverlay").forEach(span => {
+    // data-tipso から #番号 を抽出
+    const tipso = span.getAttribute("data-tipso") || "";
+    const m = tipso.match(/title="#(\d+)へ返信"/);
+    const n = m ? parseInt(m[1]) : null;
+
+    const a = document.createElement("a");
+    a.className = "quote-link";
+    a.textContent = n ? ">>" + n : span.textContent || ">>";
+    a.href = "javascript:void(0)";
+
+    if (n !== null) {
+      a.addEventListener("click", e => {
+        e.stopPropagation();
+        showPopup(n, a);
+      });
+    }
+    span.replaceWith(a);
+  });
+
+  // 2) 残った plain-text の >>数字 をリンク化
+  document.querySelectorAll(".body").forEach(bodyEl => {
+    walkTextNodes(bodyEl, node => {
+      const text = node.textContent;
+      if (!/>>(\d+)/.test(text)) return;
+
+      const frag = document.createDocumentFragment();
+      let last = 0;
+      const re = />>(\d+)/g;
+      let match;
+      while ((match = re.exec(text)) !== null) {
+        if (match.index > last) {
+          frag.appendChild(document.createTextNode(text.slice(last, match.index)));
+        }
+        const n = parseInt(match[1]);
+        const a = document.createElement("a");
+        a.className = "quote-link";
+        a.textContent = ">>" + n;
+        a.href = "javascript:void(0)";
+        a.addEventListener("click", e => {
+          e.stopPropagation();
+          showPopup(n, a);
+        });
+        frag.appendChild(a);
+        last = match.index + match[0].length;
+      }
+      if (last < text.length) {
+        frag.appendChild(document.createTextNode(text.slice(last)));
+      }
+      node.replaceWith(frag);
+    });
+  });
+}
+
+function walkTextNodes(root, fn) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach(fn);
+}
+
+document.addEventListener("DOMContentLoaded", processQuoteLinks);
+</script>
+</body>
+</html>

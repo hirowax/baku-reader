@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>読み込み中...</title>
+<meta http-equiv="refresh" content="0; url=/fetch?url={{ url | urlencode }}">
+<style>
+  body { font-family: sans-serif; display: flex; justify-content: center;
+         align-items: center; min-height: 100vh; background: #f0f0f0; flex-direction: column; }
+  .spinner { width: 48px; height: 48px; border: 5px solid #ddd;
+             border-top-color: #e05; border-radius: 50%;
+             animation: spin .8s linear infinite; margin-bottom: 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  p { color: #666; }
+</style>
+</head>
+<body>
+  <div class="spinner"></div>
+  <p>全レスを取得中です。しばらくお待ちください...</p>
+</body>
+</html>
